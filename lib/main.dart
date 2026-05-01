@@ -1,7 +1,15 @@
 import 'package:flutter/cupertino.dart';
+import 'package:todo/database_service.dart';
 import 'package:todo/todo_screen.dart';
+import 'dart:io';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
+  if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  }
+
   runApp(const MyApp());
 }
 
@@ -37,10 +45,13 @@ class _HomeState extends State<Home> {
   final TextEditingController description = TextEditingController();
   DateTime selectedDate = DateTime.now();
 
-  List<List<dynamic>> taskList = [
-    [1, 1, "Task 1", "Description 1", 3, DateTime(2026, 5, 1), "pending"],
-    [2, 1, "Task 2", "Description 2", 1, DateTime(2026, 5, 2), "done"],
-  ];
+  List<List<dynamic>> taskList = [];
+
+  @override
+  void initState() {
+    super.initState();
+    loadTasks();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -107,7 +118,10 @@ class _HomeState extends State<Home> {
                   onPressed: () {
                     Navigator.of(context).push(
                       CupertinoPageRoute(
-                        builder: (context) => TodoScreen(data: taskList[i][2]),
+                        builder: (context) => TodoScreen(
+                          taskID: taskList[i][0],
+                          title: taskList[i][1],
+                        ),
                       ),
                     );
                   },
@@ -119,24 +133,23 @@ class _HomeState extends State<Home> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              taskList[i][2],
+                              taskList[i][1], // title
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
+
                             SizedBox(height: 4),
+
                             Row(
                               children: [
                                 Text(
-                                  taskList[i][3],
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    // color: CupertinoColors.secondaryLabel,
-                                  ),
+                                  taskList[i][2], // description
+                                  style: TextStyle(fontSize: 13),
                                 ),
                                 Text(
-                                  "  •  ${taskList[i][5].year}:${taskList[i][5].month.toString().padLeft(2, '0')}:${taskList[i][5].day.toString().padLeft(2, '0')}",
+                                  "  •  ${taskList[i][4].year}:${taskList[i][4].month.toString().padLeft(2, '0')}:${taskList[i][4].day.toString().padLeft(2, '0')}",
                                   style: TextStyle(
                                     fontSize: 12,
                                     color: CupertinoColors.systemGrey,
@@ -160,9 +173,50 @@ class _HomeState extends State<Home> {
     );
   }
 
+  Future<int> insertTask(Map<String, dynamic> task) async {
+    final db = await DB.database;
+    return await db.insert('tasks', task);
+  }
+
+  Future<int> deleteTask(Map<String, dynamic> task) async {
+    final db = await DB.database;
+    return await db.delete('tasks', where: 'id = ?', whereArgs: [task['id']]);
+  }
+
+  Future<int> updateTask(Map<String, dynamic> task) async {
+    final db = await DB.database;
+    return await db.update(
+      'tasks',
+      task,
+      where: 'id = ?',
+      whereArgs: [task['id']],
+    );
+  }
+
+  Future<int> loadTasks() async {
+    final db = await DB.database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'tasks',
+      orderBy: 'due_date ASC',
+    );
+    setState(() {
+      taskList = List.generate(maps.length, (i) {
+        return [
+          maps[i]['id'],
+          maps[i]['title'],
+          maps[i]['description'],
+          maps[i]['priority'],
+          DateTime.parse(maps[i]['due_date']),
+          maps[i]['status'],
+        ];
+      });
+    });
+    return maps.length;
+  }
+
   String getStatus(List task) {
-    final DateTime date = task[5];
-    final String status = task[6];
+    final DateTime date = task[4];
+    final String status = task[5];
 
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -226,7 +280,8 @@ class _HomeState extends State<Home> {
             isDefaultAction: true,
             onPressed: () {
               if (title.text.trim().isNotEmpty &&
-                  description.text.trim().isNotEmpty) {
+                  description.text.trim().isNotEmpty &&
+                  !selectedDate.isBefore(DateTime.now())) {
                 Navigator.pop(dialogContext, "add");
               }
             },
@@ -239,15 +294,12 @@ class _HomeState extends State<Home> {
 
       if (returnValue == "add") {
         setState(() {
-          taskList.add([
-            taskList.length + 1,
-            1,
-            title.text,
-            description.text,
-            4,
-            selectedDate,
-            "pending",
-          ]);
+          insertTask({
+            'title': title.text.trim(),
+            'description': description.text.trim(),
+            'due_date': selectedDate.toIso8601String(),
+          });
+          loadTasks();
           title.text = "";
           description.text = "";
         });
