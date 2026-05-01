@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:todo/todo_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -9,9 +10,6 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title = TextEditingController();
-    final description = TextEditingController();
-
     return CupertinoApp(
       title: 'ToDo and Task Management App',
       debugShowCheckedModeBanner: false,
@@ -21,25 +19,24 @@ class MyApp extends StatelessWidget {
           leading: Text("My Tasks"),
           trailing: Icon(CupertinoIcons.person_circle),
         ),
-        child: SafeArea(
-          child: Home(title: title, description: description),
-        ),
+        child: SafeArea(child: Home()),
       ),
     );
   }
 }
 
 class Home extends StatefulWidget {
-  const Home({super.key, required this.title, required this.description});
-
-  final TextEditingController title;
-  final TextEditingController description;
+  const Home({super.key});
 
   @override
   State<Home> createState() => _HomeState();
 }
 
 class _HomeState extends State<Home> {
+  final TextEditingController title = TextEditingController();
+  final TextEditingController description = TextEditingController();
+  DateTime selectedDate = DateTime.now();
+
   List<List<dynamic>> taskList = [
     [1, 1, "Task 1", "Description 1", 3, DateTime(2026, 5, 1), "pending"],
     [2, 1, "Task 2", "Description 2", 1, DateTime(2026, 5, 2), "done"],
@@ -106,11 +103,14 @@ class _HomeState extends State<Home> {
                   horizontal: 8.0,
                   vertical: 4.0,
                 ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12.0,
-                    vertical: 10.0,
-                  ),
+                child: CupertinoButton(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      CupertinoPageRoute(
+                        builder: (context) => TodoScreen(data: taskList[i][2]),
+                      ),
+                    );
+                  },
                   child: Row(
                     children: [
                       // Title + Description
@@ -126,18 +126,29 @@ class _HomeState extends State<Home> {
                               ),
                             ),
                             SizedBox(height: 4),
-                            Text(
-                              taskList[i][3],
-                              style: TextStyle(
-                                fontSize: 13,
-                                // color: CupertinoColors.secondaryLabel,
-                              ),
+                            Row(
+                              children: [
+                                Text(
+                                  taskList[i][3],
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    // color: CupertinoColors.secondaryLabel,
+                                  ),
+                                ),
+                                Text(
+                                  "  •  ${taskList[i][5].year}:${taskList[i][5].month.toString().padLeft(2, '0')}:${taskList[i][5].day.toString().padLeft(2, '0')}",
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: CupertinoColors.systemGrey,
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
                       ),
                       // Status badge
-                      statusBox(taskList[i][6]),
+                      statusBox(getStatus(taskList[i])),
                     ],
                   ),
                 ),
@@ -149,6 +160,20 @@ class _HomeState extends State<Home> {
     );
   }
 
+  String getStatus(List task) {
+    final DateTime date = task[5];
+    final String status = task[6];
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final taskDay = DateTime(date.year, date.month, date.day);
+    if (status == "done") return "done";
+    if (status == "cancelled") return "cancelled";
+    if (taskDay.isBefore(today)) return "expired";
+    if (taskDay == today) return "due_today";
+    return status;
+  }
+
   void _showAddTaskDialog(BuildContext context) {
     showCupertinoDialog(
       context: context,
@@ -156,20 +181,39 @@ class _HomeState extends State<Home> {
         title: Text("Add Task"),
         content: Padding(
           padding: const EdgeInsets.only(top: 8.0),
-          child: Column(
-            children: [
-              CupertinoTextField(
-                controller: widget.title,
-                placeholder: "Enter task title",
-                padding: EdgeInsets.all(10),
-              ),
-              SizedBox(height: 8),
-              CupertinoTextField(
-                controller: widget.description,
-                placeholder: "Enter task description",
-                padding: EdgeInsets.all(10),
-              ),
-            ],
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
+                CupertinoTextField(
+                  controller: title,
+                  placeholder: "Enter task title",
+                  padding: EdgeInsets.all(10),
+                ),
+                SizedBox(height: 8),
+                CupertinoTextField(
+                  controller: description,
+                  placeholder: "Enter task description",
+                  padding: EdgeInsets.all(10),
+                ),
+                SizedBox(width: 8),
+                CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  onPressed: () => _showTimePicker(context),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text("Date"),
+
+                      // show selected date and time in "YY:MM:DD" format
+                      Text(
+                        "${selectedDate.year.toString()}:${selectedDate.month.toString().padLeft(2, '0')}:${selectedDate.day.toString().padLeft(2, '0')}",
+                        style: TextStyle(color: CupertinoColors.systemGrey),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
         actions: [
@@ -181,8 +225,8 @@ class _HomeState extends State<Home> {
           CupertinoDialogAction(
             isDefaultAction: true,
             onPressed: () {
-              if (widget.title.text.trim().isNotEmpty &&
-                  widget.description.text.trim().isNotEmpty) {
+              if (title.text.trim().isNotEmpty &&
+                  description.text.trim().isNotEmpty) {
                 Navigator.pop(dialogContext, "add");
               }
             },
@@ -198,14 +242,14 @@ class _HomeState extends State<Home> {
           taskList.add([
             taskList.length + 1,
             1,
-            widget.title.text,
-            widget.description.text,
+            title.text,
+            description.text,
             4,
-            DateTime.now(),
+            selectedDate,
             "pending",
           ]);
-          widget.title.text = "";
-          widget.description.text = "";
+          title.text = "";
+          description.text = "";
         });
 
         // Cupertino toast-style feedback
@@ -225,6 +269,50 @@ class _HomeState extends State<Home> {
       }
     });
   }
+
+  void _showTimePicker(BuildContext context) {
+    showCupertinoModalPopup(
+      context: context,
+      builder: (_) {
+        return Container(
+          height:
+              MediaQuery.of(context).size.height *
+              0.5, // half screen (can make 1.0)
+          color: CupertinoColors.black,
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  CupertinoButton(
+                    child: Text("Cancel"),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                  CupertinoButton(
+                    child: Text("Done"),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+
+              Expanded(
+                child: CupertinoDatePicker(
+                  mode: CupertinoDatePickerMode.date,
+                  use24hFormat: false,
+                  initialDateTime: selectedDate,
+                  onDateTimeChanged: (date) {
+                    setState(() {
+                      selectedDate = date;
+                    });
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 }
 
 Widget statusBox(String text) {
@@ -232,21 +320,44 @@ Widget statusBox(String text) {
   Color color;
 
   switch (text) {
+    case "not_started":
+      icon = CupertinoIcons.circle;
+      color = CupertinoColors.systemGrey;
+      break;
+
+    case "started":
+      icon = CupertinoIcons.play_circle;
+      color = CupertinoColors.systemBlue;
+      break;
+
+    case "in_progress":
+      icon = CupertinoIcons.clock_fill;
+      color = CupertinoColors.systemIndigo;
+      break;
+
     case "done":
       icon = CupertinoIcons.checkmark_circle_fill;
       color = CupertinoColors.systemGreen;
       break;
-    case "in progress":
-      icon = CupertinoIcons.clock_fill;
-      color = CupertinoColors.systemBlue;
-      break;
-    case "cancel":
+
+    case "cancelled":
       icon = CupertinoIcons.xmark_circle_fill;
       color = CupertinoColors.systemRed;
       break;
+
+    case "expired":
+      icon = CupertinoIcons.exclamationmark_circle_fill;
+      color = CupertinoColors.systemRed;
+      break;
+
+    case "due_today":
+      icon = CupertinoIcons.sun_max_fill;
+      color = CupertinoColors.systemOrange;
+      break;
+
     default:
-      icon = CupertinoIcons.circle;
-      color = CupertinoColors.systemGrey;
+      icon = CupertinoIcons.time;
+      color = CupertinoColors.systemYellow;
   }
 
   return Row(
