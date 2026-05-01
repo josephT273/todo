@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:todo/database_service.dart';
 
 class TodoScreen extends StatefulWidget {
@@ -13,7 +14,7 @@ class TodoScreen extends StatefulWidget {
 
 class _TodoScreenState extends State<TodoScreen> {
   List<Map<String, dynamic>> todos = [];
-  final TextEditingController todoController = TextEditingController();
+  final controller = TextEditingController();
 
   @override
   void initState() {
@@ -28,11 +29,10 @@ class _TodoScreenState extends State<TodoScreen> {
         middle: Text(widget.title),
         trailing: CupertinoButton(
           padding: EdgeInsets.zero,
-          onPressed: _showAddTodoDialog,
+          onPressed: _showAddDialog,
           child: const Icon(CupertinoIcons.add),
         ),
       ),
-
       child: SafeArea(
         child: todos.isEmpty
             ? const Center(child: Text("No todos found"))
@@ -40,49 +40,78 @@ class _TodoScreenState extends State<TodoScreen> {
                 itemCount: todos.length,
                 itemBuilder: (context, index) {
                   final todo = todos[index];
-
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    child: Row(
-                      children: [
-                        GestureDetector(
-                          onTap: () => toggleTodoStatus(todo['id']),
-                          child: Icon(
-                            todo['is_done'] == 1
-                                ? CupertinoIcons.checkmark_circle_fill
-                                : CupertinoIcons.circle,
-                          ),
+                  return Container(
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
+                          color: CupertinoColors.systemGrey4,
+                          width: 0.5,
                         ),
-
-                        const SizedBox(width: 10),
-
-                        Expanded(
-                          child: GestureDetector(
-                            onLongPress: () =>
-                                _showEditDialog(todo['id'], todo['title']),
-                            child: Text(
+                      ),
+                    ),
+                    child: Slidable(
+                      key: ValueKey(todo['id']),
+                      startActionPane: ActionPane(
+                        motion: const ScrollMotion(),
+                        children: [
+                          SlidableAction(
+                            onPressed: (_) => _showEditDialog(
+                              todo['id'],
                               todo['title'],
-                              style: TextStyle(
-                                decoration: todo['is_done'] == 1
-                                    ? TextDecoration.lineThrough
-                                    : null,
+                            ),
+                            backgroundColor: CupertinoColors.activeBlue,
+                            foregroundColor: CupertinoColors.white,
+                            icon: CupertinoIcons.pencil,
+                            label: 'Edit',
+                          ),
+                        ],
+                      ),
+                      endActionPane: ActionPane(
+                        motion: const ScrollMotion(),
+                        children: [
+                          SlidableAction(
+                            onPressed: (_) => _deleteTodo(todo['id']),
+                            backgroundColor: CupertinoColors.destructiveRed,
+                            foregroundColor: CupertinoColors.white,
+                            icon: CupertinoIcons.delete,
+                            label: 'Delete',
+                          ),
+                        ],
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 14,
+                          horizontal: 12,
+                        ),
+                        child: Row(
+                          children: [
+                            GestureDetector(
+                              onTap: () => _toggleStatus(todo['id']),
+                              child: Icon(
+                                todo['is_done'] == 1
+                                    ? CupertinoIcons.checkmark_circle_fill
+                                    : CupertinoIcons.circle,
+                                color: todo['is_done'] == 1
+                                    ? CupertinoColors.systemGreen
+                                    : CupertinoColors.systemGrey,
+                                size: 24,
                               ),
                             ),
-                          ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                todo['title'],
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  decoration: todo['is_done'] == 1
+                                      ? TextDecoration.lineThrough
+                                      : null,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-
-                        CupertinoButton(
-                          padding: EdgeInsets.zero,
-                          onPressed: () => deleteTodo(todo['id']),
-                          child: const Icon(
-                            CupertinoIcons.delete,
-                            color: CupertinoColors.systemRed,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   );
                 },
@@ -91,93 +120,96 @@ class _TodoScreenState extends State<TodoScreen> {
     );
   }
 
-  // ───────────── DB OPERATIONS ─────────────
-
   Future<void> loadTodos() async {
     final db = await DB.database;
-
     final data = await db.query(
       'todos',
       where: 'task_id = ?',
       whereArgs: [widget.taskID],
     );
-
     setState(() {
       todos = data.map((e) => Map<String, dynamic>.from(e)).toList();
     });
   }
 
-  Future<void> deleteTodo(int id) async {
+  Future<void> _deleteTodo(int id) async {
     final db = await DB.database;
     await db.delete('todos', where: 'id = ?', whereArgs: [id]);
-
-    setState(() {
-      todos.removeWhere((todo) => todo['id'] == id);
-    });
+    setState(() => todos.removeWhere((t) => t['id'] == id));
   }
 
-  Future<void> addTodo(String title) async {
+  Future<void> _addTodo(String title) async {
     final db = await DB.database;
-
     final id = await db.insert('todos', {
       'task_id': widget.taskID,
       'title': title,
       'is_done': 0,
     });
+    setState(() => todos.add({
+          'id': id,
+          'task_id': widget.taskID,
+          'title': title,
+          'is_done': 0,
+        }));
 
-    setState(() {
-      todos.add({
-        'id': id,
-        'task_id': widget.taskID,
-        'title': title,
-        'is_done': 0,
-      });
-    });
+    // Update task: set to in_progress & update date to now (handles expired/done tasks)
+    await db.update(
+      'tasks',
+      {'status': 'in_progress', 'due_date': DateTime.now().toIso8601String()},
+      where: 'id = ?',
+      whereArgs: [widget.taskID],
+    );
   }
 
-  Future<void> editTodoTitle(int id, String newTitle) async {
+  Future<void> _editTodo(int id, String newTitle) async {
     final db = await DB.database;
-
     await db.update(
       'todos',
       {'title': newTitle},
       where: 'id = ?',
       whereArgs: [id],
     );
-
     setState(() {
-      final index = todos.indexWhere((t) => t['id'] == id);
-      if (index != -1) {
-        todos[index]['title'] = newTitle;
-      }
+      final i = todos.indexWhere((t) => t['id'] == id);
+      if (i != -1) todos[i]['title'] = newTitle;
     });
   }
 
-  Future<void> toggleTodoStatus(int id) async {
+  Future<void> _toggleStatus(int id) async {
+    final i = todos.indexWhere((t) => t['id'] == id);
+    if (i == -1) return;
+    final newVal = todos[i]['is_done'] == 1 ? 0 : 1;
     final db = await DB.database;
-
-    final index = todos.indexWhere((t) => t['id'] == id);
-    if (index == -1) return;
-
-    final isDone = todos[index]['is_done'] == 1;
-
     await db.update(
       'todos',
-      {'is_done': isDone ? 0 : 1},
+      {'is_done': newVal},
       where: 'id = ?',
       whereArgs: [id],
     );
+    setState(() => todos[i]['is_done'] = newVal);
 
-    setState(() {
-      todos[index]['is_done'] = isDone ? 0 : 1;
-    });
+    // Update task status based on todos
+    if (todos.isEmpty) return;
+    final allDone = todos.every((t) => t['is_done'] == 1);
+    if (allDone) {
+      await db.update(
+        'tasks',
+        {'status': 'done'},
+        where: 'id = ?',
+        whereArgs: [widget.taskID],
+      );
+    } else {
+      await db.update(
+        'tasks',
+        {'status': 'in_progress'},
+        where: 'id = ? AND status = ?',
+        whereArgs: [widget.taskID, 'done'],
+      );
+    }
   }
 
-  // ───────────── UI DIALOGS ─────────────
-
-  void _showAddTodoDialog() {
-    todoController.clear();
-
+  void _showAddDialog() {
+    controller.clear();
     showCupertinoDialog(
       context: context,
       builder: (_) => CupertinoAlertDialog(
@@ -185,7 +217,7 @@ class _TodoScreenState extends State<TodoScreen> {
         content: Padding(
           padding: const EdgeInsets.only(top: 8),
           child: CupertinoTextField(
-            controller: todoController,
+            controller: controller,
             placeholder: "Enter todo",
           ),
         ),
@@ -197,11 +229,10 @@ class _TodoScreenState extends State<TodoScreen> {
           CupertinoDialogAction(
             isDefaultAction: true,
             child: const Text("Add"),
-            onPressed: () async {
-              final text = todoController.text.trim();
+            onPressed: () {
+              final text = controller.text.trim();
               if (text.isEmpty) return;
-
-              await addTodo(text);
+              _addTodo(text);
               Navigator.pop(context);
             },
           ),
@@ -211,15 +242,14 @@ class _TodoScreenState extends State<TodoScreen> {
   }
 
   void _showEditDialog(int id, String oldTitle) {
-    todoController.text = oldTitle;
-
+    controller.text = oldTitle;
     showCupertinoDialog(
       context: context,
       builder: (_) => CupertinoAlertDialog(
         title: const Text("Edit Todo"),
         content: Padding(
           padding: const EdgeInsets.only(top: 8),
-          child: CupertinoTextField(controller: todoController),
+          child: CupertinoTextField(controller: controller),
         ),
         actions: [
           CupertinoDialogAction(
@@ -229,11 +259,10 @@ class _TodoScreenState extends State<TodoScreen> {
           CupertinoDialogAction(
             isDefaultAction: true,
             child: const Text("Save"),
-            onPressed: () async {
-              final text = todoController.text.trim();
+            onPressed: () {
+              final text = controller.text.trim();
               if (text.isEmpty) return;
-
-              await editTodoTitle(id, text);
+              _editTodo(id, text);
               Navigator.pop(context);
             },
           ),
