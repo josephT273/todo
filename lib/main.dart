@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 
 void main() {
   runApp(const MyApp());
@@ -7,24 +7,23 @@ void main() {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     final title = TextEditingController();
     final description = TextEditingController();
 
-    return MaterialApp(
+    return CupertinoApp(
       title: 'ToDo and Task Management App',
       debugShowCheckedModeBanner: false,
-      home: Scaffold(
-        backgroundColor: Colors.grey[100],
-        appBar: AppBar(
-          elevation: 0,
-          title: Text("My Tasks"),
-          actions: [CircleAvatar(child: Icon(Icons.person))],
+      home: CupertinoPageScaffold(
+        // backgroundColor: CupertinoColors.systemGroupedBackground,
+        navigationBar: CupertinoNavigationBar(
+          leading: Text("My Tasks"),
+          trailing: Icon(CupertinoIcons.person_circle),
         ),
-
-        body: Home(title: title, description: description),
+        child: SafeArea(
+          child: Home(title: title, description: description),
+        ),
       ),
     );
   }
@@ -45,141 +44,101 @@ class _HomeState extends State<Home> {
     [1, 1, "Task 1", "Description 1", 3, DateTime(2026, 5, 1), "pending"],
     [2, 1, "Task 2", "Description 2", 1, DateTime(2026, 5, 2), "done"],
   ];
+
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
+        // ── Search + Filter Row ──
         Padding(
           padding: const EdgeInsets.all(8.0),
           child: Row(
             children: [
-              Flexible(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: TextField(
-                    decoration: InputDecoration(
-                      hintText: "Search tasks...",
-                      border: OutlineInputBorder(borderSide: BorderSide.none),
-                      prefixIcon: Icon(Icons.search),
-                    ),
-                    // style: TextStyle(fontSize: 18),
-                  ),
-                ),
+              Expanded(
+                child: CupertinoSearchTextField(placeholder: "Search tasks..."),
               ),
-              SizedBox(width: 10),
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: IconButton(
-                  onPressed: () {},
-                  icon: Icon(Icons.filter_alt_sharp, color: Colors.amber),
+              SizedBox(width: 8),
+              CupertinoButton(
+                padding: EdgeInsets.all(8),
+                onPressed: () {},
+                child: Icon(
+                  CupertinoIcons.slider_horizontal_3,
+                  color: CupertinoColors.systemYellow,
                 ),
               ),
             ],
           ),
         ),
+
         SizedBox(height: 10),
+
         Padding(
-          padding: const EdgeInsets.all(8.0),
+          padding: const EdgeInsets.symmetric(horizontal: 8.0),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text("All Tasks", style: TextStyle(fontWeight: FontWeight(700))),
-              TextButton.icon(
-                icon: Icon(Icons.add),
-                label: Text("Add Task"),
-                onPressed: () {
-                  showDialog<String>(
-                    context: context, // ✅ now valid
-                    builder: (dialogContext) => AlertDialog(
-                      title: Text("Add Task"),
-                      content: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          TextField(
-                            controller: widget.title,
-                            decoration: InputDecoration(
-                              hintText: "Enter task title",
-                            ),
-                          ),
-
-                          TextField(
-                            controller: widget.description,
-                            decoration: InputDecoration(
-                              hintText: "Enter task description",
-                            ),
-                          ),
-                        ],
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () =>
-                              Navigator.pop(dialogContext, "cancel"),
-                          child: Text("Cancel"),
-                        ),
-                        TextButton(
-                          onPressed: () => {
-                            if (widget.title.text.isNotEmpty &&
-                                widget.description.text.isNotEmpty)
-                              {Navigator.pop(dialogContext, "add")},
-                          },
-                          child: Text("Add"),
-                        ),
-                      ],
-                    ),
-                  ).then((returnValue) {
-                    if (!context.mounted) return;
-
-                    // [1, 1, "Task 1", "Description 1", 3, DateTime(2026, 5, 1), "pending"]
-                    if (returnValue == "add") {
-                      taskList.add([
-                        taskList.length + 1,
-                        1,
-                        widget.title.text,
-                        widget.description.text,
-                        4,
-                        DateTime.now(),
-                        "pending",
-                      ]);
-                      setState(() {
-                        widget.title.text = "";
-                        widget.description.text = "";
-                      });
-                      ScaffoldMessenger.of(
-                        context,
-                      ).showSnackBar(SnackBar(content: Text("Task added")));
-                    }
-                  });
-                },
+              Text(
+                "All Tasks",
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: () => _showAddTaskDialog(context),
+                child: Row(
+                  children: [
+                    Icon(CupertinoIcons.add, size: 18),
+                    SizedBox(width: 4),
+                    Text("Add Task"),
+                  ],
+                ),
               ),
             ],
           ),
         ),
 
+        // ── Task List ──
         Expanded(
           child: ListView.builder(
             itemCount: taskList.length,
-            itemBuilder: (BuildContext context, int i) {
+            itemBuilder: (context, i) {
               return Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 8.0,
                   vertical: 4.0,
                 ),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(10),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12.0,
+                    vertical: 10.0,
                   ),
-                  child: ListTile(
-                    // leading: Checkbox(value: i % 2 == 0, onChanged: (value) {}),
-                    title: Text(taskList[i][2]),
-                    subtitle: Text(taskList[i][3]),
-                    trailing: statusBox(taskList[i][6]),
+                  child: Row(
+                    children: [
+                      // Title + Description
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              taskList[i][2],
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              taskList[i][3],
+                              style: TextStyle(
+                                fontSize: 13,
+                                // color: CupertinoColors.secondaryLabel,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Status badge
+                      statusBox(taskList[i][6]),
+                    ],
                   ),
                 ),
               );
@@ -189,24 +148,120 @@ class _HomeState extends State<Home> {
       ],
     );
   }
+
+  void _showAddTaskDialog(BuildContext context) {
+    showCupertinoDialog(
+      context: context,
+      builder: (dialogContext) => CupertinoAlertDialog(
+        title: Text("Add Task"),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 8.0),
+          child: Column(
+            children: [
+              CupertinoTextField(
+                controller: widget.title,
+                placeholder: "Enter task title",
+                padding: EdgeInsets.all(10),
+              ),
+              SizedBox(height: 8),
+              CupertinoTextField(
+                controller: widget.description,
+                placeholder: "Enter task description",
+                padding: EdgeInsets.all(10),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.pop(dialogContext, "cancel"),
+            child: Text("Cancel"),
+          ),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () {
+              if (widget.title.text.trim().isNotEmpty &&
+                  widget.description.text.trim().isNotEmpty) {
+                Navigator.pop(dialogContext, "add");
+              }
+            },
+            child: Text("Add"),
+          ),
+        ],
+      ),
+    ).then((returnValue) {
+      if (!context.mounted) return;
+
+      if (returnValue == "add") {
+        setState(() {
+          taskList.add([
+            taskList.length + 1,
+            1,
+            widget.title.text,
+            widget.description.text,
+            4,
+            DateTime.now(),
+            "pending",
+          ]);
+          widget.title.text = "";
+          widget.description.text = "";
+        });
+
+        // Cupertino toast-style feedback
+        showCupertinoDialog(
+          context: context,
+          barrierDismissible: true,
+          builder: (_) => CupertinoAlertDialog(
+            content: Text("✅ Task added"),
+            actions: [
+              CupertinoDialogAction(
+                onPressed: () => Navigator.pop(context),
+                child: Text("OK"),
+              ),
+            ],
+          ),
+        );
+      }
+    });
+  }
 }
 
 Widget statusBox(String text) {
-  Widget icon = Icon(Icons.pending);
+  IconData icon;
+  Color color;
+
   switch (text) {
     case "done":
-      icon = Icon(Icons.done);
+      icon = CupertinoIcons.checkmark_circle_fill;
+      color = CupertinoColors.systemGreen;
       break;
     case "in progress":
-      icon = Icon(Icons.timer);
+      icon = CupertinoIcons.clock_fill;
+      color = CupertinoColors.systemBlue;
+      break;
     case "cancel":
-      icon = Icon(Icons.cancel);
+      icon = CupertinoIcons.xmark_circle_fill;
+      color = CupertinoColors.systemRed;
+      break;
     default:
-      icon = Icon(Icons.pending);
+      icon = CupertinoIcons.circle;
+      color = CupertinoColors.systemGrey;
   }
-  return TextButton.icon(
-    onPressed: () {},
-    label: Text(text.toUpperCase()),
-    icon: icon,
+
+  return Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Icon(icon, color: color, size: 16),
+      SizedBox(width: 4),
+      Text(
+        text.toUpperCase(),
+        style: TextStyle(
+          fontSize: 11,
+          color: color,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    ],
   );
 }
